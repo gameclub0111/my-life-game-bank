@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>人生ゲーム - 銀行システム</title>
+<style>
+:root{--bg:#0f1724;--card:#0b1220;--accent:#06b6d4;--muted:#94a3b8;--glass:rgba(255,255,255,0.03)}
+*{box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans JP','Helvetica Neue',Arial}
+body{background:linear-gradient(180deg,#071026 0%, #081428 100%);color:#e6eef6;margin:0;padding:20px}
+.wrap{max-width:1100px;margin:0 auto}
+header{display:flex;align-items:center;gap:16px;margin-bottom:18px}
+header h1{font-size:20px;margin:0}
+.controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.card{background:var(--card);padding:12px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,.6);}
+.grid{display:grid;grid-template-columns:1fr 380px;gap:12px}
+.players{display:flex;flex-direction:column;gap:10px}
+.player{display:flex;align-items:center;gap:8px;padding:10px;border-radius:10px;background:var(--glass)}
+.player input.name{background:transparent;border:0;color:inherit;font-weight:600;font-size:16px;width:110px}
+.player .money{min-width:120px;text-align:right;font-weight:700}
+.player .mini{font-size:12px;color:var(--muted)}
+.btn{background:linear-gradient(180deg,#0ea5a1,#0694a2);border:none;padding:8px 10px;color:white;border-radius:8px;cursor:pointer}
+.btn.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06)}
+.inputs{display:flex;gap:6px;align-items:center}
+.small{padding:6px 8px;font-size:14px;border-radius:8px}
+.actions{display:flex;gap:8px}
+label{font-size:13px;color:var(--muted)}
+.rightpanel{display:flex;flex-direction:column;gap:10px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:8px;border-bottom:1px dashed rgba(255,255,255,0.03);text-align:left}
+th{font-weight:700;font-size:13px;color:var(--muted)}
+.stocks .row{display:flex;justify-content:space-between;align-items:center;padding:8px;background:var(--glass);border-radius:8px;margin-bottom:8px}
+.iousize{font-size:13px;color:#ffd6a5}
+.sharebox{display:flex;gap:8px}
+.muted{color:var(--muted)}
+footer{margin-top:18px;color:var(--muted);font-size:13px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.rightpanel{order:2}}
+.readonly{opacity:.7}
+#fullscreenBtn{position:fixed;top:12px;right:12px;z-index:10000;padding:8px 12px;font-size:14px;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div id="codeScreen" style="position:fixed;inset:0;background:#000c;backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:9999">
+<div style="background:#0b1220;padding:20px;border-radius:12px;width:300px;text-align:center">
+<h3>共有コード</h3>
+<div id="displayShareCode" style="font-size:32px;letter-spacing:6px;margin:10px 0;font-weight:700"></div>
+<button id="startAsViewer" class="btn small">共有画面として開始</button>
+<hr style="margin:16px 0;border-color:#222" />
+<h4>操作画面で接続</h4>
+<input id="enterCode" class="small" placeholder="4桁コード" style="width:100%;margin-bottom:10px" />
+<button id="connectBtn" class="btn small" style="width:100%">接続</button>
+</div>
+</div>
+<header>
+<h1>人生ゲーム ? 銀行システム</h1>
+<div class="muted">単位: $ ｜ 初期資金: 1000$</div>
+</header>
+<div id="gameArea" class="grid">
+  <div class="players" id="playersContainer"></div>
+  <div class="rightpanel" id="rightPanel"></div>
+</div>
+</div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyB7USUzDA1wPI6gnmheaD7TsR65iXt3pxg",
+  authDomain: "my-life-game-bank.firebaseapp.com",
+  databaseURL: "https://my-life-game-bank-default-rtdb.firebaseio.com",
+  projectId: "my-life-game-bank",
+  storageBucket: "my-life-game-bank.firebasestorage.app",
+  messagingSenderId: "127717338232",
+  appId: "1:127717338232:web:e84011116fc7ebeb47918d",
+  measurementId: "G-SYKJJDEW2J"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+let state = {players:[], meta:{}};
+let ROOM_CODE = ("0000" + Math.floor(Math.random()*10000)).slice(-4);
+document.getElementById('displayShareCode').textContent = ROOM_CODE;
+const dbRef = ref(db, 'lifegame_bank/rooms/' + ROOM_CODE);
+
+function render(){
+  const container = document.getElementById('playersContainer');
+  container.innerHTML='';
+  state.players.forEach((p,i)=>{
+    const div = document.createElement('div');
+    div.className='player';
+    div.innerHTML=`<input class='name' value='${p.name}' oninput='state.players[${i}].name=this.value;syncToFirebase()' /> <div class='money'>${p.money}$</div>`;
+    container.appendChild(div);
+  });
+}
+
+function syncToFirebase(){ set(dbRef,state); }
+const originalRender = render;
+render = function(){ originalRender(); syncToFirebase(); }
+onValue(dbRef, snapshot=>{ const data = snapshot.val(); if(data){ state=data; originalRender(); } });
+
+const codeScreen = document.getElementById('codeScreen');
+const connectBtn = document.getElementById('connectBtn');
+const enterCode = document.getElementById('enterCode');
+const startAsViewer = document.getElementById('startAsViewer');
+
+connectBtn.onclick = ()=>{ if(enterCode.value===ROOM_CODE){ codeScreen.style.display='none'; } else { alert('コードが違います'); } };
+startAsViewer.onclick = ()=>{ codeScreen.style.display='none'; showViewerFullScreen(); };
+
+function showViewerFullScreen(){
+  const btn = document.createElement('button');
+  btn.id='fullscreenBtn';
+  btn.textContent='? 全画面';
+  btn.onclick=()=>{document.documentElement.requestFullscreen();};
+  document.body.appendChild(btn);
+}
+
+// 初期プレイヤー作成
+if(state.players.length===0){
+  for(let i=1;i<=4;i++){ state.players.push({name:'Player '+i,money:1000,stocks:[],insurance:[],debt:0}); }
+}
+render();
+
+// GitHub Pages用：index.html単体で公開可能
+// リポジトリにこのHTMLをアップロードするだけで動作
+</script>
+</body>
+</html>
